@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>สื่อการเรียนรู้แผนที่-แผนผัง 3D อาคารเพทาย - รร.อนุบาลวัดหนองขุนชาติ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; overflow: hidden; background: #0f172a; color: #f8fafc; user-select: none; }
+
+    /* Modern Glassmorphism */
+    .glass {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.80));
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+
+    /* Micro-Animations for Buttons */
+    .ui-btn {
+      position: relative;
+      overflow: hidden;
+      transition: all 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .ui-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px -3px rgba(0, 0, 0, 0.35);
+    }
+    .ui-btn:active {
+      transform: translateY(0px) scale(0.94);
+    }
+    .ui-btn::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -120%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+      transform: skewX(-20deg);
+      transition: left 0.55s ease;
+    }
+    .ui-btn:hover::after {
+      left: 140%;
+    }
+
+    /* Active State Styles with Subtle Glow */
+    @keyframes softPulsePink {
+      0%, 100% { box-shadow: 0 0 12px rgba(236, 72, 153, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.35); }
+      50% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
+    }
+    @keyframes softPulseBlue {
+      0%, 100% { box-shadow: 0 0 12px rgba(14, 165, 233, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.35); }
+      50% { box-shadow: 0 0 18px rgba(56, 189, 248, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.5); }
+    }
+    @keyframes floatBadge {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-3px); }
+    }
+
+    .cam-active {
+      background: linear-gradient(135deg, #ec4899, #be185d) !important;
+      color: #ffffff !important;
+      font-weight: 700;
+      border-color: #f9a8d4 !important;
+      animation: softPulsePink 2.8s infinite ease-in-out;
+    }
+    .floor-active {
+      background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+      color: #ffffff !important;
+      border-color: #7dd3fc !important;
+      font-weight: 700;
+      animation: softPulseBlue 2.8s infinite ease-in-out;
+    }
+    .anim-active {
+      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+      color: #ffffff !important;
+      font-weight: 700;
+      border-color: #fde68a !important;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.55);
+    }
+    .legend-active {
+      background: linear-gradient(135deg, rgba(250, 204, 21, 0.25), rgba(234, 179, 8, 0.12)) !important;
+      border-color: #facc15 !important;
+      transform: translateX(4px);
+    }
+
+    .float-anim { animation: floatBadge 3.2s ease-in-out infinite; }
+    .panel-transition { transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+  </style>
+</head>
+<body>
+  <div id="canvas-wrap" class="fixed inset-0 z-0"></div>
+
+  <!-- ปุ่มลอยเรียกเมนูกลับเมื่อซ่อนเมนู -->
+  <button id="restore-ui-btn" onclick="toggleFullUI(false)" class="hidden fixed top-3 right-3 z-50 glass ui-btn px-4 py-2 rounded-full text-xs font-bold text-pink-300 border border-pink-400/50 flex items-center gap-1.5">
+    <span>👁️</span> <span>แสดงเมนูควบคุม</span>
+  </button>
+
+  <!-- แถบควบคุมด้านบน -->
+  <header id="top-ui" class="fixed top-0 left-0 right-0 z-30 p-2 sm:p-3 flex flex-col gap-2 pointer-events-none panel-transition">
+    <!-- แถวที่ 1: ชื่อสื่อการเรียนรู้ & เครื่องมือด่วน -->
+    <div class="flex items-center justify-between gap-2 pointer-events-auto">
+      <div class="glass px-3 py-1.5 rounded-2xl flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-md float-anim">
+          3D
+        </div>
+        <div class="truncate pr-1">
+          <div class="text-xs sm:text-sm font-bold tracking-wide text-white truncate">อาคารเพทาย : สื่อเรียนรู้แผนที่-แผนผัง</div>
+          <div id="sub-status" class="text-[10px] text-amber-300/90 truncate">สำรวจอาคารจริง 3 มิติ เปรียบเทียบกับแผนผังมุมบน 2 มิติ</div>
+        </div>
+      </div>
+
+      <div class="glass p-1.5 rounded-2xl flex items-center gap-1.5 shrink-0">
+        <button id="grid-btn" onclick="toggleMapGrid()" class="ui-btn px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-[11px] font-semibold text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+          <span>🌐</span> <span class="hidden sm:inline">เส้นตาราง</span>
+        </button>
+        <button id="measure-btn" onclick="toggleMeasure()" class="ui-btn px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-[11px] font-semibold text-slate-200 border border-slate-700 flex items-center gap-1">
+          <span>📏</span> <span>วัดระยะ+ทิศ</span>
+        </button>
+        <button id="quiz-btn" onclick="toggleQuizModal()" class="ui-btn px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-[11px] font-bold text-white border border-indigo-400/40 flex items-center gap-1 shadow-md">
+          <span>🎯</span> <span>ควิซแผนผัง</span>
+        </button>
+        <button onclick="exportPNG()" class="ui-btn px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-[11px] font-bold text-white border border-emerald-400/40">
+          📷 PNG
+        </button>
+        <button onclick="toggleFullUI(true)" class="ui-btn px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-950/80 hover:text-rose-300 text-[11px] text-slate-300 border border-slate-700" title="ซ่อนเมนู">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- แถวที่ 2: สลับมุมมองหลัก (3D / 2D) + ปุ่มอนิเมชัน + สลับชั้น -->
+    <div class="flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+      <!-- Segmented Bar: มุมมอง & อนิเมชัน -->
+      <div class="glass p-1.5 rounded-2xl flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full">
+        <button id="c-front" onclick="setCameraView('front')" class="ui-btn cam-active px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap bg-slate-800/80 text-slate-200 border border-slate-700/80 flex items-center gap-1.5">
+          <span>🏛️</span> <span>1. มุมมอง 3 มิติ (อาคารจริง)</span>
+        </button>
+        <button id="c-top2d" onclick="setCameraView('top2d')" class="ui-btn px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap bg-slate-800/80 text-emerald-300 border border-slate-700/80 flex items-center gap-1.5">
+          <span>🗺️</span> <span>2. แผนผังมุมบน 2D (1:1)</span>
+        </button>
+
+        <div class="h-4 w-[1px] bg-slate-700 mx-0.5 shrink-0"></div>
+
+        <button id="btn-explode" onclick="toggleExplodeView()" class="ui-btn px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap bg-slate-800/90 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+          <span>✨</span> <span>แยกชั้นลอยตัว</span>
+        </button>
+        <button id="btn-sun" onclick="toggleSunAnimation()" class="ui-btn px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap bg-slate-800/90 text-sky-300 border border-sky-500/30 flex items-center gap-1">
+          <span>☀️</span> <span id="time-label">14:30 น.</span>
+        </button>
+      </div>
+
+      <!-- Segmented Bar: เลือกชั้น -->
+      <div class="glass p-1.5 rounded-2xl flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-2 whitespace-nowrap">ระดับชั้น:</span>
+        <button id="f-all" onclick="setFloor('all')" class="ui-btn floor-active px-2.5 py-1 rounded-xl text-[11px] border border-slate-700/80 bg-slate-800/80 whitespace-nowrap">ครบทุกชั้น</button>
+        <button id="f-1" onclick="setFloor(1)" class="ui-btn px-2.5 py-1 rounded-xl text-[11px] border border-slate-700/80 bg-slate-800/80 text-slate-200 whitespace-nowrap">ชั้น 1</button>
+        <button id="f-2" onclick="setFloor(2)" class="ui-btn px-2.5 py-1 rounded-xl text-[11px] border border-slate-700/80 bg-slate-800/80 text-slate-200 whitespace-nowrap">ชั้น 2 (ป.4)</button>
+        <button id="f-3" onclick="setFloor(3)" class="ui-btn px-2.5 py-1 rounded-xl text-[11px] border border-slate-700/80 bg-slate-800/80 text-slate-200 whitespace-nowrap">ชั้น 3 (ป.5-6)</button>
+        <button id="f-4" onclick="setFloor(4)" class="ui-btn px-2.5 py-1 rounded-xl text-[11px] border border-slate-700/80 bg-slate-800/80 text-slate-200 whitespace-nowrap">ชั้น 4</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- เข็มทิศอินเทอร์แอคทีฟ (HUD Compass Rose) -->
+  <div id="hud-compass" class="fixed top-36 right-3 z-20 glass p-2.5 rounded-2xl flex flex-col items-center gap-1.5 w-24 pointer-events-auto panel-transition">
+    <div class="text-[10px] font-bold text-amber-300 tracking-wide flex items-center gap-1">
+      <span>🧭</span> <span>เข็มทิศ</span>
+    </div>
+    <div class="relative w-16 h-16 rounded-full border-2 border-slate-600/80 bg-slate-950/90 flex items-center justify-center shadow-inner">
+      <div id="compass-dial" class="w-full h-full relative transition-transform duration-100">
+        <button onclick="rotateToCardinal('N')" class="ui-btn absolute top-0.5 left-1/2 -translate-x-1/2 text-[10px] font-extrabold text-rose-500 hover:scale-125">N</button>
+        <button onclick="rotateToCardinal('S')" class="ui-btn absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-300 hover:scale-125">S</button>
+        <button onclick="rotateToCardinal('E')" class="ui-btn absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-amber-300 hover:scale-125">E</button>
+        <button onclick="rotateToCardinal('W')" class="ui-btn absolute left-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-cyan-300 hover:scale-125">W</button>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div class="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[14px] border-b-rose-500 drop-shadow"></div>
+          <div class="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[14px] border-t-slate-400"></div>
+        </div>
+      </div>
+    </div>
+    <div class="text-[9px] text-slate-300 text-center leading-tight">แตะตัวอักษรทิศเพื่อหันกล้อง</div>
+  </div>
+
+  <!-- กล่องคำอธิบายสัญลักษณ์แผนผัง (พับเก็บได้ + มีอนิเมชัน) -->
+  <aside id="legend-panel" class="fixed bottom-16 left-2 sm:left-3 z-20 glass p-2.5 rounded-2xl w-56 pointer-events-auto panel-transition">
+    <div class="flex items-center justify-between mb-1.5 cursor-pointer" onclick="toggleLegendCollapse()">
+      <span class="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+        <span>🗂️</span> <span>สัญลักษณ์ในแผนผัง</span>
+      </span>
+      <button id="legend-toggle-icon" class="text-[10px] text-slate-300 bg-slate-800/80 px-1.5 py-0.5 rounded-md border border-slate-700">ย่อ ▼</button>
+    </div>
+    <div id="legend-body" class="grid grid-cols-1 gap-1.5 text-[11px] transition-all duration-300">
+      <button id="leg-classroom" onclick="highlightCategory('classroom')" class="ui-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-slate-800/75 hover:bg-slate-700/90 border border-slate-700/60 text-left">
+        <span class="w-3.5 h-3.5 rounded-md bg-sky-400 shadow-sm shadow-sky-400/50 inline-block shrink-0"></span>
+        <span class="truncate">ห้องเรียน (กว้าง 7.5 ม.)</span>
+      </button>
+      <button id="leg-stair" onclick="highlightCategory('stair')" class="ui-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-slate-800/75 hover:bg-slate-700/90 border border-slate-700/60 text-left">
+        <span class="w-3.5 h-3.5 rounded-md bg-amber-500 shadow-sm shadow-amber-500/50 inline-block shrink-0"></span>
+        <span class="truncate">โถงบันไดขึ้น-ลง (ซ้าย/ขวา)</span>
+      </button>
+      <button id="leg-door" onclick="highlightCategory('door')" class="ui-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-slate-800/75 hover:bg-slate-700/90 border border-slate-700/60 text-left">
+        <span class="w-3.5 h-3.5 rounded-md bg-amber-900 border border-amber-400 inline-block shrink-0"></span>
+        <span class="truncate">ประตูทางเข้าห้องเรียน</span>
+      </button>
+      <button id="leg-safety" onclick="highlightCategory('safety')" class="ui-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-slate-800/75 hover:bg-slate-700/90 border border-slate-700/60 text-left">
+        <span class="w-3.5 h-3.5 rounded-full bg-red-600 shadow-sm shadow-red-500/50 inline-block shrink-0"></span>
+        <span class="truncate">ถังดับเพลิง & ลำโพงฮอร์น</span>
+      </button>
+      <button id="leg-stage" onclick="highlightCategory('stage')" class="ui-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-slate-800/75 hover:bg-slate-700/90 border border-slate-700/60 text-left">
+        <span class="w-3.5 h-3.5 rounded-md bg-orange-500 shadow-sm shadow-orange-500/50 inline-block shrink-0"></span>
+        <span class="truncate">เวทีเกียรติยศ & ลานกิจกรรม</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Modal ภารกิจการเรียนรู้แผนผัง (Interactive Map Quiz) -->
+  <div id="quiz-modal" class="hidden fixed inset-x-3 top-36 z-40 max-w-md mx-auto glass p-4 rounded-2xl border border-indigo-400/50 pointer-events-auto panel-transition">
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+        <span>🎯</span> <span>ภารกิจนักสำรวจแผนผัง (ข้อที่ <span id="q-idx">1</span>/4)</span>
+      </div>
+      <button onclick="toggleQuizModal()" class="ui-btn text-xs bg-slate-800 px-2 py-0.5 rounded-lg text-slate-300 hover:text-white">✕ ปิด</button>
+    </div>
+    <p id="q-text" class="text-xs font-semibold text-white mb-3 leading-relaxed"></p>
+    <div id="q-choices" class="grid grid-cols-1 gap-1.5 text-xs mb-2"></div>
+    <div id="q-feedback" class="text-[11px] font-semibold min-h-[1.25rem]"></div>
+  </div>
+
+  <!-- แถบข้อมูลและเส้นมาตราส่วนด้านล่าง -->
+  <footer id="bottom-ui" class="fixed bottom-2 left-2 right-2 z-20 pointer-events-none flex justify-center panel-transition">
+    <div class="glass px-3 py-2 rounded-2xl max-w-3xl w-full pointer-events-auto flex items-center justify-between gap-3">
+      <!-- เส้นมาตราส่วน (Scale Bar) -->
+      <div class="flex flex-col items-center shrink-0 bg-slate-950/90 px-3 py-1 rounded-xl border border-slate-700/80">
+        <div class="text-[9px] text-amber-300 font-bold">มาตราส่วน 1 : 100</div>
+        <div class="flex items-center gap-1.5 mt-0.5">
+          <span class="text-[9px] text-slate-400">0</span>
+          <div class="w-12 h-1.5 rounded-full bg-gradient-to-r from-emerald-400 via-sky-400 to-indigo-400"></div>
+          <span class="text-[9px] text-emerald-300 font-bold">7.5 ม.</span>
+        </div>
+      </div>
+
+      <div class="min-w-0 flex-1">
+        <div id="info-title" class="text-xs font-bold text-pink-300 truncate">อาคารเพทาย : กว้าง 9.50 ม. × ยาว 52.00 ม. (4 ชั้น)</div>
+        <div id="info-desc" class="text-[11px] text-slate-300 truncate">แตะที่ส่วนใดก็ได้ของอาคารเพื่อดูชื่อห้อง ทิศทาง และความหมายของสัญลักษณ์ในแผนผัง</div>
+      </div>
+
+      <button onclick="setCameraView(currentCamView)" class="ui-btn px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-[11px] text-cyan-300 font-semibold shrink-0 border border-cyan-500/30">
+        🔄 รีเซ็ตมุมมอง
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    // พิกัดเสา 15 ต้น (X = -26.00 ถึง +26.00 ม.) และระดับความสูงแกน Y
+    const GRID_15_X = [-26.00, -22.25, -18.50, -14.75, -11.25, -7.50, -3.75, 0.00, 3.75, 7.50, 11.25, 14.75, 18.50, 22.25, 26.00];
+    const COL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O'];
+    const FLOOR_Y = [0.40, 3.90, 7.40, 10.90];
+
+    const ROOM_LABELS = {
+      2: ['ป.4/1', 'ป.4/2', 'ป.4/3', 'ป.4/4', 'ป.4/5', 'ป.4/6', 'ป.4/7'],
+      3: ['ป.5/1', 'ป.5/2', 'ป.6/4', 'ป.6/5', 'ป.6/6', 'ป.6/7', 'ห้องพักครู'],
+      4: ['ป.6/1', 'ป.6/2', 'ป.6/3', 'ห้องจริยธรรม', 'ห้องดนตรี', 'ห้องศิลปะ', 'ห้องคอมพิวเตอร์']
+    };
+
+    const QUIZ_DATA = [
+      {
+        q: '1. หากหน้าอาคารเพทายและเวทีเกียรติยศหันไปทาง "ทิศใต้ (S)" ป้ายชื่ออาคารเพทายและห้องวิทย์ Power 10 ที่อยู่ปีกซ้ายสุดจะอยู่ทางทิศใด?',
+        choices: ['ทิศตะวันตก (W)', 'ทิศตะวันออก (E)', 'ทิศเหนือ (N)'],
+        ans: 0,
+        explain: 'ถูกต้องครับ! เมื่อทิศเหนือ (N) อยู่ด้านหลังอาคาร ด้านซ้ายมือสุดจึงเป็น ทิศตะวันตก (W)'
+      },
+      {
+        q: '2. ในแผนผังอาคารเพทาย 1 ช่วงเสากว้าง 3.75 เมตร หากห้องเรียน 1 ห้องใช้พื้นที่ 2 ช่วงเสา ห้องเรียนจะมีความยาวกี่เมตร?',
+        choices: ['5.50 เมตร', '7.50 เมตร', '10.00 เมตร'],
+        ans: 1,
+        explain: 'ยอดเยี่ยมครับ! 3.75 ม. × 2 ช่วงเสา = 7.50 เมตร'
+      },
+      {
+        q: '3. หากเดินออกจากห้อง ป.4/6 (ฝั่งขวาของตึก) ไปยังโถงบันไดฝั่งซ้าย จะต้องเดินไปทางทิศใด?',
+        choices: ['เดินไปทางทิศเหนือ (N)', 'เดินไปทางทิศตะวันออก (E)', 'เดินไปทางทิศตะวันตก (W)'],
+        ans: 2,
+        explain: 'ถูกต้องครับ! การเดินจากปีกขวา (ตะวันออก) ไปทางปีกซ้ายของอาคาร คือการมุ่งหน้าไปทางทิศตะวันตก (W)'
+      },
+      {
+        q: '4. เมื่อดวงอาทิตย์ขึ้นทางทิศตะวันออก (E) ในตอนเช้า เงาของอาคารเพทายจะทอดยาวไปทางทิศใด?',
+        choices: ['ทอดไปทางทิศตะวันตก (W)', 'ทอดไปทางทิศตะวันออก (E)', 'ไม่มีเงา'],
+        ans: 0,
+        explain: 'ถูกต้องครับ! เงาจะทอดไปในทิศตรงข้ามกับแสงอาทิตย์เสมอ ลองกดปุ่ม ☀️ เพื่อดูเงาเคลื่อนที่ได้ครับ'
+      }
+    ];
+
+    let scene, camera, perspCam, orthoCam, renderer, controls, sunLight, ambientLight;
+    let pethaiGroup, mapGridGroup, measureGroup, cloudGroup;
+    let currentCamView = 'front', currentFloor = 'all', showGrid = true, legendCollapsed = false;
+    let measureActive = false, measurePts = [];
+    let isExploded = false, sunAnimating = false, sunHours = 14.5;
+    let activeCategory = null, currentQuizIdx = 0;
+
+    let camLerpActive = false;
+    const camTargetPos = new THREE.Vector3(), camTargetLook = new THREE.Vector3();
+    const floorGroups = [], corridorLights = [];
+    let roofGroupRef = null;
+    const categoryMeshes = { classroom: [], stair: [], door: [], safety: [], stage: [] };
+    const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    const TEX = {}, MAT = {};
+
+    function init() {
+      const wrap = document.getElementById('canvas-wrap');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x7dd3fc);
+
+      const aspect = window.innerWidth / window.innerHeight;
+      perspCam = new THREE.PerspectiveCamera(45, aspect, 0.2, 600);
+
+      const frustum = 68;
+      orthoCam = new THREE.OrthographicCamera(-frustum * aspect / 2, frustum * aspect / 2, frustum / 2, -frustum / 2, 0.5, 500);
+      orthoCam.position.set(0, 120, 2);
+      orthoCam.lookAt(0, 0, 2);
+
+      camera = perspCam;
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      wrap.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI / 2 - 0.005;
+
+      ambientLight = new THREE.AmbientLight(0xffffff, 0.78);
+      scene.add(ambientLight);
+
+      sunLight = new THREE.DirectionalLight(0xfff4e6, 1.05);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.left = -42;
+      sunLight.shadow.camera.right = 42;
+      sunLight.shadow.camera.top = 35;
+      sunLight.shadow.camera.bottom = -25;
+      scene.add(sunLight);
+
+      initTexturesAndMaterials();
+
+      pethaiGroup = new THREE.Group();
+      mapGridGroup = new THREE.Group();
+      measureGroup = new THREE.Group();
+      cloudGroup = new THREE.Group();
+      scene.add(pethaiGroup, mapGridGroup, measureGroup, cloudGroup);
+
+      buildEnvironment(pethaiGroup);
+      buildMapCoordinateGrid(mapGridGroup);
+      build3DCompassRose(mapGridGroup);
+      buildPethaiMasterModel(pethaiGroup);
+      buildFloatingClouds(cloudGroup);
+
+      updateSunPosition(sunHours);
+      setCameraView('front');
+      renderQuizQuestion();
+
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('resize', onResize);
+      animate();
+    }
+
+    // === 1. สร้างลวดลาย Procedural Textures สมจริง ===
+    function makeTex(w, h, fn, repeatX = 1, repeatY = 1) {
+      const cvs = document.createElement('canvas');
+      cvs.width = w; cvs.height = h;
+      fn(cvs.getContext('2d'), w, h);
+      const t = new THREE.CanvasTexture(cvs);
+      if (repeatX > 1 || repeatY > 1) {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(repeatX, repeatY);
+      }
+      return t;
+    }
+
+    function initTexturesAndMaterials() {
+      TEX.terrazzo = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#cfc8be'; ctx.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 450; i++) {
+          ctx.fillStyle = i % 3 === 0 ? '#ffffff' : (i % 2 === 0 ? '#8c8275' : '#57534e');
+          ctx.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
+        }
+        ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, 256, 256);
+      }, 26, 4);
+
+      TEX.blueTile = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#e0f2fe'; ctx.fillRect(0, 0, 256, 256);
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 2; c++) {
+            const cx = 64 + c * 128, cy = 64 + r * 128;
+            ctx.strokeStyle = '#1d4ed8'; ctx.lineWidth = 8;
+            ctx.beginPath(); ctx.arc(cx, cy, 50, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = '#1e40af';
+            ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }, 14, 3);
+
+      TEX.orangeTile = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#fed7aa'; ctx.fillRect(0, 0, 256, 256);
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 2; c++) {
+            const cx = 64 + c * 128, cy = 64 + r * 128;
+            ctx.fillStyle = '#ea580c';
+            ctx.beginPath(); ctx.arc(cx, cy, 42, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffedd5';
+            ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }, 7, 3);
+
+      TEX.darkDoor = makeTex(256, 512, ctx => {
+        ctx.fillStyle = '#261c1a'; ctx.fillRect(0, 0, 256, 512);
+        ctx.strokeStyle = '#3f2e2b'; ctx.lineWidth = 8;
+        ctx.strokeRect(36, 36, 184, 150);
+        ctx.strokeRect(36, 210, 184, 80);
+        ctx.strokeRect(36, 314, 184, 156);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath(); ctx.arc(222, 265, 11, 0, Math.PI * 2); ctx.fill();
+      });
+
+      TEX.bulletinBoard = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#064e3b'; ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = '#d97706'; ctx.lineWidth = 10; ctx.strokeRect(5, 5, 246, 246);
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 4; c++) {
+            ctx.fillStyle = '#a7f3d0';
+            ctx.fillRect(18 + c * 56, 65 + r * 60, 48, 50);
+          }
+        }
+      });
+
+      TEX.breezeBlock = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, 256, 256);
+        ctx.fillStyle = '#334155';
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 6; c++) ctx.fillRect(18 + c * 38, 14 + r * 29, 24, 16);
+        }
+      });
+
+      TEX.transomVent = makeTex(512, 128, ctx => {
+        ctx.fillStyle = '#f8f4f0'; ctx.fillRect(0, 0, 512, 128);
+        ctx.fillStyle = '#334155';
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 18; c++) ctx.fillRect(14 + c * 27, 16 + r * 34, 15, 22);
+        }
+      });
+
+      TEX.window4 = makeTex(512, 256, ctx => {
+        ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, 512, 256);
+        for (let i = 0; i < 4; i++) {
+          const x = 14 + i * 124;
+          ctx.fillStyle = '#334155'; ctx.fillRect(x, 14, 108, 48);
+          ctx.fillStyle = '#1e293b'; ctx.fillRect(x, 72, 50, 168);
+          ctx.fillStyle = '#0f172a'; ctx.fillRect(x + 58, 72, 50, 168);
+        }
+      });
+
+      TEX.emblem = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 10; ctx.strokeRect(8, 8, 240, 240);
+        ctx.beginPath(); ctx.moveTo(46, 50); ctx.lineTo(210, 50); ctx.lineTo(128, 202); ctx.closePath();
+        ctx.fillStyle = '#e0f2fe'; ctx.fill();
+        ctx.lineWidth = 10; ctx.strokeStyle = '#1e3a8a'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(128, 116, 35, 0, Math.PI * 2);
+        ctx.fillStyle = '#f472b6'; ctx.fill();
+      });
+
+      TEX.pethaiWallSign = makeTex(512, 256, ctx => {
+        ctx.fillStyle = '#eb8488'; ctx.fillRect(0, 0, 512, 256);
+        ctx.beginPath(); ctx.moveTo(75, 85); ctx.lineTo(140, 85); ctx.lineTo(107, 165); ctx.closePath();
+        ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#1e3a8a'; ctx.stroke();
+        ctx.font = 'bold 58px Sarabun';
+        ctx.lineWidth = 10; ctx.strokeStyle = '#ffffff'; ctx.strokeText('อาคารเพทาย', 158, 142);
+        ctx.fillStyle = '#0369a1'; ctx.fillText('อาคารเพทาย', 158, 142);
+      });
+
+      TEX.stageBackdrop = makeTex(1024, 256, ctx => {
+        ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, 1024, 256);
+        ctx.strokeStyle = '#1e3a8a'; ctx.lineWidth = 14;
+        ctx.beginPath(); ctx.moveTo(30, 130); ctx.lineTo(90, 190); ctx.lineTo(360, 190); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(994, 130); ctx.lineTo(934, 190); ctx.lineTo(664, 190); ctx.stroke();
+        [230, 735].forEach(px => {
+          ctx.fillStyle = '#0f172a'; ctx.fillRect(px, 60, 62, 102);
+          ctx.strokeStyle = '#d97706'; ctx.lineWidth = 5; ctx.strokeRect(px, 60, 62, 102);
+        });
+        ctx.fillStyle = '#991b1b'; ctx.font = 'bold 36px Sarabun'; ctx.textAlign = 'center';
+        ctx.fillText('เวทีเกียรติยศ', 512, 92);
+        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 21px Sarabun';
+        ctx.fillText('โรงเรียนอนุบาลวัดหนองขุนชาติ (อุทิศพิทยาคาร)', 512, 126);
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(365, 195, 294, 14);
+        ctx.fillRect(350, 214, 324, 14);
+        ctx.fillRect(335, 233, 354, 18);
+      });
+
+      TEX.stageFront = makeTex(1024, 160, ctx => {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1024, 160);
+        ctx.fillStyle = '#93c5fd'; ctx.fillRect(0, 128, 1024, 32);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(466, 8, 92, 148);
+        ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.strokeRect(468, 10, 88, 144);
+      });
+
+      TEX.tealRoof = makeTex(256, 256, ctx => {
+        ctx.fillStyle = '#0284c7'; ctx.fillRect(0, 0, 256, 256);
+        ctx.fillStyle = '#0369a1';
+        for (let x = 0; x < 256; x += 16) ctx.fillRect(x, 0, 7, 256);
+      }, 24, 4);
+
+      MAT.pinkLower = new THREE.MeshStandardMaterial({ color: 0xe26d7a, roughness: 0.55 });
+      MAT.whiteUpper = new THREE.MeshStandardMaterial({ color: 0xf8f5f2, roughness: 0.6 });
+      MAT.blackSkirt = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.4 });
+      MAT.terrazzo = new THREE.MeshStandardMaterial({ map: TEX.terrazzo, roughness: 0.22, metalness: 0.08 });
+      MAT.stainless = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.85, roughness: 0.18 });
+      MAT.woodBench = new THREE.MeshStandardMaterial({ color: 0x8c3b2b, roughness: 0.45 });
+      MAT.darkDoor = new THREE.MeshStandardMaterial({ map: TEX.darkDoor, roughness: 0.4 });
+      MAT.transom = new THREE.MeshStandardMaterial({ map: TEX.transomVent, roughness: 0.65 });
+      MAT.breeze = new THREE.MeshStandardMaterial({ map: TEX.breezeBlock, roughness: 0.65 });
+      MAT.win4 = new THREE.MeshStandardMaterial({ map: TEX.window4, roughness: 0.35 });
+      MAT.bulletin = new THREE.MeshStandardMaterial({ map: TEX.bulletinBoard, roughness: 0.5 });
+      MAT.blueTile = new THREE.MeshStandardMaterial({ map: TEX.blueTile, roughness: 0.28 });
+      MAT.orangeTile = new THREE.MeshStandardMaterial({ map: TEX.orangeTile, roughness: 0.3 });
+      MAT.cyanSteel = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35 });
+      MAT.greenCanopy = new THREE.MeshStandardMaterial({ color: 0x059669, roughness: 0.4 });
+      MAT.neonLamp = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfffbeb, emissiveIntensity: 0.3 });
+    }
+
+    // ป้ายชื่อห้องแบบติดหน้าประตูจริง (ไม่ใช่ป้ายลอย)
+    function makeRoomSignMat(roomCode) {
+      const t = makeTex(256, 80, ctx => {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 175, 80);
+        ctx.fillStyle = '#1e3a8a'; ctx.fillRect(175, 0, 81, 80);
+        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, 252, 76);
+        ctx.fillStyle = '#be123c';
+        ctx.beginPath(); ctx.arc(28, 40, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 15px Sarabun';
+        ctx.fillText('ชั้นประถมศึกษาปีที่', 50, 34);
+        ctx.font = '13px Sarabun'; ctx.fillText('Primary', 78, 56);
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 34px Sarabun'; ctx.textAlign = 'center';
+        ctx.fillText(roomCode, 215, 52);
+      });
+      return new THREE.MeshStandardMaterial({ map: t, roughness: 0.4 });
+    }
+
+    function mkBox(parent, w, h, d, x, y, z, matOrColor, category = null, meta = null) {
+      const mat = (matOrColor instanceof THREE.Material)
+        ? matOrColor.clone()
+        : new THREE.MeshStandardMaterial({ color: matOrColor, roughness: 0.6 });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      if (meta) m.userData = Object.assign(m.userData || {}, meta);
+      if (category && categoryMeshes[category]) {
+        categoryMeshes[category].push(m);
+      }
+      parent.add(m);
+      return m;
+    }
+
+    // === 2. ตารางเส้นกริดแผนผัง (เอาป้ายลอยชื่อเสา A-O ออกแล้ว) ===
+    function buildMapCoordinateGrid(parent) {
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.35 });
+      GRID_15_X.forEach(gx => {
+        const pts = [new THREE.Vector3(gx, 0.05, -10), new THREE.Vector3(gx, 0.05, 16)];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        parent.add(new THREE.Line(geo, lineMat));
+      });
+      [-6, -3.5, 0, 2.5, 4.65, 9.5].forEach(gz => {
+        const pts = [new THREE.Vector3(-28, 0.05, gz), new THREE.Vector3(28, 0.05, gz)];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        parent.add(new THREE.Line(geo, lineMat));
+      });
+    }
+
+    function build3DCompassRose(parent) {
+      const cg = new THREE.Group();
+      cg.position.set(-34, 0.12, 12);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(3.0, 3.5, 32),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      cg.add(ring);
+      mkBox(cg, 0.4, 0.1, 6.8, 0, 0.05, 0, 0xef4444);
+      mkBox(cg, 6.8, 0.1, 0.4, 0, 0.05, 0, 0x38bdf8);
+      mkSpriteBadge(cg, 'N (ทิศเหนือ)', 0, 1.4, -4.4, '#991b1b', '#fca5a5', 4.5, 1.3);
+      mkSpriteBadge(cg, 'S (ทิศใต้)', 0, 1.4, 4.4, '#1e293b', '#cbd5e1', 4.5, 1.3);
+      mkSpriteBadge(cg, 'E (ตะวันออก)', 4.8, 1.4, 0, '#78350f', '#fde047', 4.8, 1.3);
+      mkSpriteBadge(cg, 'W (ตะวันตก)', -4.8, 1.4, 0, '#0c4a6e', '#7dd3fc', 4.8, 1.3);
+      parent.add(cg);
+    }
+
+    function buildFloatingClouds(parent) {
+      const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true, opacity: 0.85 });
+      for (let i = 0; i < 7; i++) {
+        const c = new THREE.Group();
+        c.position.set((Math.random() - 0.5) * 140, 28 + Math.random() * 10, -35 + (Math.random() - 0.5) * 50);
+        mkBox(c, 9, 2.2, 4.5, 0, 0, 0, cloudMat);
+        mkBox(c, 5.5, 2.8, 3.8, -1.5, 0.8, 0.4, cloudMat);
+        mkBox(c, 5.0, 2.4, 3.5, 2.0, 0.5, -0.3, cloudMat);
+        parent.add(c);
+      }
+    }
+
+    // === 3. องค์ประกอบตามแนวระเบียงและห้องเรียน ===
+    function addCorridorBench(parent, cx, yBase, zPos, length = 3.1) {
+      const bg = new THREE.Group();
+      bg.position.set(cx, yBase, zPos);
+      mkBox(bg, length, 0.05, 0.42, 0, 0.46, 0, MAT.woodBench);
+      [-length / 2 + 0.2, 0, length / 2 - 0.2].forEach(lx => {
+        mkBox(bg, 0.04, 0.44, 0.38, lx, 0.22, 0, MAT.blackSkirt);
+      });
+      mkBox(bg, length - 0.2, 0.02, 0.28, 0, 0.15, 0, MAT.blackSkirt);
+      parent.add(bg);
+    }
+
+    function addWallFan(parent, x, y, z) {
+      const fg = new THREE.Group();
+      fg.position.set(x, y, z);
+      mkBox(fg, 0.14, 0.22, 0.18, 0, 0, 0.08, MAT.whiteUpper);
+      const cage = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.24, 0.24, 0.10, 14),
+        new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.3 })
+      );
+      cage.rotation.x = Math.PI / 2 + 0.35;
+      cage.position.set(0, 0.05, 0.26);
+      fg.add(cage);
+      parent.add(fg);
+    }
+
+    function addHornSpeakerInCage(parent, x, y, z) {
+      const sg = new THREE.Group();
+      sg.position.set(x, y, z);
+      mkBox(sg, 0.46, 0.38, 0.36, 0, 0, 0, MAT.blackSkirt, 'safety', {
+        infoTitle: '📢 ลำโพงฮอร์นประชาสัมพันธ์ในโครงเหล็ก',
+        infoDesc: 'ติดตั้งที่เสาระเบียงชั้น 2 สำหรับประกาศเสียงตามสายของโรงเรียน'
+      });
+      const horn = new THREE.Mesh(
+        new THREE.ConeGeometry(0.15, 0.30, 14, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xd6d3d1, side: THREE.DoubleSide })
+      );
+      horn.rotation.z = Math.PI / 2;
+      sg.add(horn);
+      parent.add(sg);
+    }
+
+    function addFireExtinguisher(parent, x, y, z, locDesc) {
+      return mkBox(parent, 0.22, 0.50, 0.22, x, y, z, 0xdc2626, 'safety', {
+        infoTitle: '🧯 จุดติดตั้งถังดับเพลิงเคมีแห้ง',
+        infoDesc: `ตำแหน่ง: ${locDesc} (สัญลักษณ์ความปลอดภัยในแผนผังอาคาร)`
+      });
+    }
+
+    function addSafetyGrille(parent, cx, spanW, yBase, zFront) {
+      const barMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
+      const yBot = yBase + 0.95, hStraight = 1.55;
+      mkBox(parent, spanW, 0.035, 0.035, cx, yBot + 0.75, zFront, barMat);
+      mkBox(parent, spanW, 0.045, 0.045, cx, yBot + hStraight, zFront, barMat);
+      for (let b = 0; b <= 5; b++) {
+        const bx = cx - spanW / 2 + (b * spanW) / 5;
+        mkBox(parent, 0.035, hStraight, 0.035, bx, yBot + hStraight / 2, zFront, barMat);
+        const slant = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.85, 0.035), barMat);
+        slant.position.set(bx, yBot + hStraight + 0.36, zFront + 0.22);
+        slant.rotation.x = 0.52;
+        parent.add(slant);
+      }
+    }
+
+    function buildEnvironment(parent) {
+      mkBox(parent, 125, 0.2, 95, 0, -0.1, 18, 0x3f6212);
+      const rg = new THREE.Group();
+      rg.position.set(0, 0.02, 13.5);
+      mkBox(rg, 96, 0.05, 6.5, 0, 0, 0, 0x475569);
+      mkBox(rg, 96, 0.06, 0.15, 0, 0.02, -0.35, 0xfacc15);
+      mkBox(rg, 96, 0.06, 0.15, 0, 0.02, 0.35, 0xfacc15);
+      parent.add(rg);
+    }
+
+    // === 4. โมเดลหลัก "อาคารเพทาย" (ไม่มีป้ายลอยชื่อเสาและไม่มีป้ายลอยชื่อห้องเรียน) ===
+    function buildPethaiMasterModel(parent) {
+      const bGroup = new THREE.Group();
+      parent.add(bGroup);
+
+      mkBox(bGroup, 53.2, 0.40, 10.6, 0, 0.20, 0, 0x9a3412);
+
+      for (let fIdx = 0; fIdx < 4; fIdx++) {
+        const yBase = FLOOR_Y[fIdx];
+        const floorNum = fIdx + 1;
+        const fGroup = new THREE.Group();
+        fGroup.userData = { floorNum, baseOffsetY: 0, fIdx };
+        floorGroups.push(fGroup);
+        bGroup.add(fGroup);
+
+        [-26.02, 26.02].forEach(sideX => {
+          mkBox(fGroup, 0.28, 3.50, 6.2, sideX, yBase + 1.75, -0.5, MAT.pinkLower);
+          mkBox(fGroup, 0.38, 3.50, 0.55, sideX, yBase + 1.75, -3.5, MAT.whiteUpper);
+          mkBox(fGroup, 0.38, 3.50, 0.55, sideX, yBase + 1.75, 2.5, MAT.whiteUpper);
+        });
+
+        mkBox(fGroup, 52.0, 0.24, 6.0, 0, yBase, -0.5, 0xe2e8f0);
+        mkBox(fGroup, 52.0, 0.26, 2.25, 0, yBase + 0.01, 3.55, MAT.terrazzo);
+        mkBox(fGroup, 52.0, 0.08, 2.25, 0, yBase + 3.42, 3.55, MAT.whiteUpper);
+
+        GRID_15_X.forEach((px, pIdx) => {
+          [-3.5, 2.5, 4.55].forEach(pz => {
+            if (floorNum === 1) {
+              mkBox(fGroup, 0.42, 1.90, 0.42, px, yBase + 2.55, pz, MAT.whiteUpper);
+              mkBox(fGroup, 0.44, 1.35, 0.44, px, yBase + 0.95, pz, MAT.pinkLower);
+              mkBox(fGroup, 0.46, 0.26, 0.46, px, yBase + 0.13, pz, 0x7f1d1d);
+            } else {
+              mkBox(fGroup, 0.38, 0.12, 0.42, px, yBase + 0.06, pz, MAT.blackSkirt);
+              mkBox(fGroup, 0.36, 1.25, 0.40, px, yBase + 0.74, pz, MAT.pinkLower);
+              mkBox(fGroup, 0.35, 2.13, 0.38, px, yBase + 2.43, pz, MAT.whiteUpper);
+            }
+          });
+          if (floorNum >= 2 && pIdx < 14) {
+            mkBox(fGroup, 1.2, 0.06, 0.16, px + 1.875, yBase + 3.38, 3.55, MAT.neonLamp);
+          }
+        });
+
+        const pLight = new THREE.PointLight(0xfffbeb, 0, 18);
+        pLight.position.set(0, yBase + 3.1, 3.5);
+        fGroup.add(pLight);
+        corridorLights.push(pLight);
+
+        if (floorNum === 1) {
+          buildGroundFloorAndHonorStage(fGroup, yBase);
+        }
+
+        if (floorNum >= 2) {
+          mkBox(fGroup, 52.1, 0.92, 0.10, 0, yBase + 0.46, 4.70, 0xf1f5f9);
+          mkBox(fGroup, 52.0, 0.92, 0.10, 0, yBase + 0.46, 4.58, MAT.pinkLower);
+          mkBox(fGroup, 52.2, 0.12, 0.24, 0, yBase + 0.08, 4.66, 0xe11d48);
+          const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 51.6, 12), MAT.stainless);
+          rail.rotation.z = Math.PI / 2;
+          rail.position.set(0, yBase + 1.14, 4.58);
+          fGroup.add(rail);
+
+          mkBox(fGroup, 51.5, 0.04, 0.04, 0, yBase + 2.38, 2.62, MAT.whiteUpper);
+
+          mkBox(fGroup, 0.18, 2.35, 0.90, -25.92, yBase + 1.85, 3.15, MAT.breeze);
+          mkBox(fGroup, 0.18, 2.35, 0.90, -25.92, yBase + 1.85, 4.10, MAT.breeze);
+          mkBox(fGroup, 0.20, 0.70, 2.15, -25.92, yBase + 0.35, 3.58, MAT.pinkLower);
+          addCorridorBench(fGroup, -25.55, yBase + 0.13, 3.58, 1.8);
+
+          mkBox(fGroup, 0.16, 3.30, 2.15, 22.25, yBase + 1.65, 3.58, new THREE.MeshStandardMaterial({ color: 0x0f766e, transparent: true, opacity: 0.65 }));
+
+          if (floorNum === 2) {
+            addHornSpeakerInCage(fGroup, -3.75, yBase + 2.55, 4.28);
+            addFireExtinguisher(fGroup, -11.25, yBase + 0.95, 2.75, 'ชั้น 2 หน้าโถงบันไดซ้าย');
+          }
+          if (floorNum === 3) {
+            addFireExtinguisher(fGroup, 3.75, yBase + 0.95, 2.72, 'ชั้น 3 หน้าห้อง ป.6/6');
+          }
+
+          let roomCounter = 0;
+          for (let i = 0; i < 14; i++) {
+            const x1 = GRID_15_X[i], x2 = GRID_15_X[i + 1];
+            const spanW = x2 - x1, cx = (x1 + x2) / 2;
+            const isStair = (i === 3 || i === 10);
+            const isEndVent = (i === 0 || i === 13);
+
+            if (isStair) {
+              const stairSide = i === 3 ? 'ฝั่งซ้าย (ทิศตะวันตก)' : 'ฝั่งขวา (ทิศตะวันออก)';
+              mkBox(fGroup, spanW, 3.50, 1.85, cx, yBase + 1.75, 5.575, MAT.whiteUpper, 'stair', {
+                infoTitle: `🟧 โถงบันได${stairSide} (ชั้น ${floorNum})`,
+                infoDesc: `กว้าง 3.50 ม. มุขยื่นด้านหน้า +1.85 ม. เชื่อมต่อระหว่างชั้น`
+              });
+              mkBox(fGroup, 2.2, 1.6, 2.8, cx, yBase + 0.9, 1.2, 0xd97706, 'stair');
+              if (floorNum <= 3) {
+                mkBox(fGroup, 0.48, 1.15, 1.92, x1 + 0.24, yBase + 0.65, 5.575, MAT.pinkLower);
+                mkBox(fGroup, 0.48, 1.15, 1.92, x2 - 0.24, yBase + 0.65, 5.575, MAT.pinkLower);
+                mkBox(fGroup, 2.10, 2.15, 0.16, cx, yBase + 1.75, 6.52, MAT.win4);
+              } else {
+                mkBox(fGroup, spanW + 0.2, 0.28, 2.05, cx, yBase + 0.14, 5.575, MAT.whiteUpper);
+                mkBox(fGroup, 2.25, 2.25, 0.18, cx, yBase + 1.80, 6.52, new THREE.MeshStandardMaterial({ map: TEX.emblem }));
+              }
+            } else {
+              const roomList = ROOM_LABELS[floorNum] || ROOM_LABELS[2];
+              const rName = roomList[Math.min(roomCounter, roomList.length - 1)];
+
+              mkBox(fGroup, spanW - 0.12, 0.10, 5.7, cx, yBase + 0.16, -0.5, (i % 2 === 0) ? 0x38bdf8 : 0x60a5fa, 'classroom', {
+                infoTitle: `🟦 ห้องเรียน ${rName} (ชั้น ${floorNum})`,
+                infoDesc: `ขนาดห้องมาตรฐาน 7.50 × 6.00 ม. (พื้นที่ 45 ตร.ม.)`
+              });
+
+              addCorridorBench(fGroup, cx, yBase + 0.13, 4.30, spanW - 0.55);
+
+              mkBox(fGroup, spanW, 0.12, 0.22, cx, yBase + 0.06, 2.50, MAT.blackSkirt);
+              mkBox(fGroup, spanW, 1.25, 0.20, cx, yBase + 0.74, 2.50, MAT.pinkLower);
+              mkBox(fGroup, spanW, 1.35, 0.20, cx, yBase + 2.04, 2.50, MAT.whiteUpper);
+              mkBox(fGroup, spanW - 0.2, 0.68, 0.21, cx, yBase + 3.05, 2.50, MAT.transom);
+
+              mkBox(fGroup, spanW, 0.95, 0.20, cx, yBase + 0.475, -3.50, MAT.pinkLower);
+              mkBox(fGroup, spanW - 0.3, 1.65, 0.22, cx, yBase + 1.75, -3.50, MAT.win4);
+              mkBox(fGroup, spanW, 0.90, 0.20, cx, yBase + 3.05, -3.50, MAT.whiteUpper);
+
+              const doorX = x1 + 0.85;
+              mkBox(fGroup, 0.92, 2.10, 0.26, doorX, yBase + 1.15, 2.50, MAT.darkDoor, 'door', {
+                infoTitle: `🚪 ประตูห้องเรียน ${rName} (ชั้น ${floorNum})`,
+                infoDesc: `ประตูไม้ลูกฟักสีเข้ม กว้าง 0.90 ม. สูง 2.05 ม. เปิดออกสู่ระเบียงทางเดินทิศใต้`
+              });
+              addWallFan(fGroup, doorX + 0.65, yBase + 2.48, 2.55);
+
+              if (i % 2 === 1) {
+                roomCounter++;
+                // คงเฉพาะแผ่นป้ายชื่อห้องขนาดจริงที่ติดอยู่เหนือประตูตามภาพถ่าย (เอาป้ายลอยออกแล้ว)
+                const signMat = makeRoomSignMat(rName);
+                mkBox(fGroup, 0.04, 0.26, 0.68, doorX - 0.38, yBase + 2.32, 2.86, signMat);
+                mkBox(fGroup, 1.35, 1.25, 0.06, cx + 0.55, yBase + 1.45, 2.61, MAT.bulletin);
+              } else {
+                mkBox(fGroup, 1.85, 1.45, 0.23, cx + 0.45, yBase + 1.68, 2.50, MAT.win4);
+              }
+
+              if (isEndVent && floorNum === 2) {
+                mkBox(fGroup, spanW - 0.25, 2.45, 0.16, cx, yBase + 2.15, 4.70, MAT.breeze);
+              } else {
+                addSafetyGrille(fGroup, cx, spanW - 0.3, yBase, 4.70);
+              }
+            }
+          }
+
+          [-18.50, -14.75, -11.25, -3.75, 3.75, 11.25, 14.75, 18.50].forEach(divX => {
+            mkBox(fGroup, 0.16, 3.20, 6.0, divX, yBase + 1.60, -0.5, MAT.whiteUpper);
+          });
+        }
+      }
+
+      // หลังคาปั้นหยาสีฟ้าอมเขียว
+      const rGroup = new THREE.Group();
+      rGroup.userData = { isRoof: true };
+      roofGroupRef = rGroup;
+      const hw = 27.6, hd = 6.4, h = 2.80, ridge = hw - hd;
+      const v = new Float32Array([
+        -hw,0,hd,  hw,0,hd,  ridge,h,0,   -hw,0,hd,  ridge,h,0, -ridge,h,0,
+        hw,0,-hd, -hw,0,-hd, -ridge,h,0,   hw,0,-hd, -ridge,h,0, ridge,h,0,
+        -hw,0,-hd, -hw,0,hd, -ridge,h,0,
+        hw,0,hd,   hw,0,-hd, ridge,h,0
+      ]);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+      geo.computeVertexNormals();
+      const uvs = [];
+      for (let i = 0; i < v.length; i += 3) uvs.push((v[i] + hw) / (hw * 2), (v[i + 2] + hd) / (hd * 2));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      const roofMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: TEX.tealRoof, roughness: 0.4, side: THREE.DoubleSide }));
+      roofMesh.position.set(0, 14.40, 0.5);
+      rGroup.add(roofMesh);
+      mkBox(rGroup, 54.0, 0.14, 11.6, 0, 14.35, 0.5, MAT.whiteUpper);
+      mkBox(rGroup, 54.4, 0.24, 12.0, 0, 14.48, 0.5, 0xe11d48);
+      bGroup.add(rGroup);
+    }
+
+    function buildGroundFloorAndHonorStage(parent, yBase) {
+      mkBox(parent, 7.4, 3.25, 0.25, -22.25, yBase + 1.62, 2.5, new THREE.MeshStandardMaterial({ map: TEX.pethaiWallSign }), 'classroom', {
+        infoTitle: '🔬 ห้องปฏิบัติการวิทยาศาสตร์พลังสิบ (Power 10)',
+        infoDesc: 'ตั้งอยู่ชั้น 1 ปีกซ้ายสุด (ทิศตะวันตก) ติดป้ายชื่ออาคารเพทาย'
+      });
+      mkBox(parent, 7.4, 3.25, 0.22, -11.0, yBase + 1.62, 2.5, 0x0f766e);
+
+      mkBox(parent, 8.2, 0.35, 3.6, -7.5, yBase + 0.18, -0.8, 0x1e3a8a, 'stage', {
+        infoTitle: '🌳 ลานสานทักษะ (Skills Arena)',
+        infoDesc: 'เวทีกิจกรรมภายในโถงชั้น 1 พัฒนาทักษะ 6 ด้าน'
+      });
+      mkBox(parent, 8.0, 2.7, 0.2, -7.5, yBase + 1.5, -2.5, MAT.whiteUpper);
+
+      mkBox(parent, 54.0, 0.32, 5.2, 0, 0.16, 7.1, MAT.blueTile, 'stage', {
+        infoTitle: '💠 ลานอเนกประสงค์กระเบื้องลายคราม',
+        infoDesc: 'พื้นที่หน้าอาคารเพทายใต้กันสาดเมทัลชีทสีเขียว ยาวตลอดแนว 54.00 เมตร'
+      });
+      mkBox(parent, 54.4, 0.22, 0.45, 0, 0.11, 9.75, 0xc2410c);
+
+      [{ cx: -18.25, w: 17.5 }, { cx: 18.25, w: 17.5 }].forEach(wing => {
+        mkBox(parent, wing.w, 0.08, 5.0, wing.cx, 3.48, 7.2, MAT.greenCanopy);
+        mkBox(parent, wing.w + 0.2, 0.52, 0.16, wing.cx, 3.22, 9.68, MAT.greenCanopy);
+        for (let zBeam = 5.2; zBeam <= 9.2; zBeam += 1.0) {
+          mkBox(parent, wing.w, 0.10, 0.08, wing.cx, 3.34, zBeam, MAT.cyanSteel);
+        }
+        mkBox(parent, wing.w, 0.22, 0.16, wing.cx, 3.05, 9.45, MAT.cyanSteel);
+      });
+
+      [-26.0, -22.25, -18.50, -14.75, -11.25, 11.25, 14.75, 18.50, 22.25, 26.0].forEach(px => {
+        mkBox(parent, 0.22, 3.10, 0.22, px, 1.80, 9.45, MAT.cyanSteel);
+      });
+
+      mkBox(parent, 14.5, 0.52, 4.5, 0, 0.56, 7.1, MAT.orangeTile, 'stage', {
+        infoTitle: '👑 เวทีเกียรติยศ (กึ่งกลางหน้าอาคาร)',
+        infoDesc: 'ตั้งอยู่กึ่งกลางหน้าอาคารเพทาย หันหน้าไปทางทิศใต้สู่สนามหญ้า'
+      });
+      mkBox(parent, 14.5, 0.78, 0.14, 0, 0.58, 9.42, new THREE.MeshStandardMaterial({ map: TEX.stageFront }));
+      mkBox(parent, 14.2, 2.85, 0.20, 0, 2.22, 4.95, new THREE.MeshStandardMaterial({ map: TEX.stageBackdrop }));
+
+      [-6.5, -3.2, 3.2, 6.5].forEach(sx => {
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.75, 20), MAT.whiteUpper);
+        cyl.position.set(sx, 2.18, 9.10);
+        parent.add(cyl);
+      });
+
+      mkBox(parent, 19.0, 0.22, 5.0, 0, 3.52, 7.2, MAT.whiteUpper);
+
+      const gw = 7.2, gh = 4.3, gz = 9.55, gy = 3.60;
+      const gVerts = new Float32Array([-gw/2, gy, gz,  gw/2, gy, gz,  0, gy + gh, gz]);
+      const gGeo = new THREE.BufferGeometry();
+      gGeo.setAttribute('position', new THREE.BufferAttribute(gVerts, 3));
+      gGeo.computeVertexNormals();
+      parent.add(new THREE.Mesh(gGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide })));
+
+      const gableVerts = new Float32Array([
+        -gw/2, gy, gz,  -gw/2, gy, 5.2,  0, gy+gh, 5.2,   -gw/2, gy, gz,  0, gy+gh, 5.2,  0, gy+gh, gz,
+        gw/2, gy, 5.2,   gw/2, gy, gz,   0, gy+gh, gz,    gw/2, gy, 5.2,  0, gy+gh, gz,   0, gy+gh, 5.2
+      ]);
+      const gableGeo = new THREE.BufferGeometry();
+      gableGeo.setAttribute('position', new THREE.BufferAttribute(gableVerts, 3));
+      gableGeo.computeVertexNormals();
+      parent.add(new THREE.Mesh(gableGeo, new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4, side: THREE.DoubleSide })));
+
+      mkBox(parent, 1.45, 1.45, 0.12, 0, gy + 1.55, gz + 0.06, new THREE.MeshStandardMaterial({ map: TEX.emblem }));
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.45, roughness: 0.3 });
+      [-1, 1].forEach(dir => {
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(0.22, 5.65, 0.22), goldMat);
+        beam.position.set(dir * 1.82, gy + gh / 2, gz + 0.05);
+        beam.rotation.z = dir * 0.695;
+        parent.add(beam);
+      });
+    }
+
+    // สร้างป้าย Sprite เฉพาะสำหรับเข็มทิศและสายวัดระยะ
+    function mkSpriteBadge(parent, text, x, y, z, bg = '#0f172a', border = '#f472b6', sx = 5.0, sy = 1.4) {
+      const cvs = document.createElement('canvas');
+      cvs.width = 256; cvs.height = 72;
+      const ctx = cvs.getContext('2d');
+      ctx.fillStyle = bg; ctx.strokeStyle = border; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.roundRect(6, 6, 244, 60, 16); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 24px Sarabun'; ctx.textAlign = 'center';
+      ctx.fillText(text, 128, 44);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cvs), depthTest: false }));
+      sp.position.set(x, y, z);
+      sp.scale.set(sx, sy, 1);
+      parent.add(sp);
+    }
+
+    // === 5. ระบบสลับมุมกล้อง อนิเมชัน และ UI ===
+    function setCameraView(view) {
+      currentCamView = view;
+      ['front', 'top2d'].forEach(k => {
+        const el = document.getElementById('c-' + k);
+        if (el) el.classList.toggle('cam-active', k === view);
+      });
+
+      if (view === 'top2d') {
+        camera = orthoCam;
+        controls.object = orthoCam;
+        controls.enableRotate = false;
+        orthoCam.position.set(0, 120, 2);
+        orthoCam.lookAt(0, 0, 2);
+        controls.target.set(0, 0, 2);
+        if (currentFloor === 'all' && !isExploded) setFloor(2);
+        document.getElementById('info-title').textContent = '🗺️ แผนผังมุมบน 2D (มาตราส่วนจริง 1:1 ไร้ป้ายบังตา)';
+        document.getElementById('info-desc').textContent = 'แตะเลือก ชั้น 1-4 ด้านบนเพื่อดูผังห้องแต่ละชั้น หรือแตะที่ห้องเรียนเพื่อดูชื่อห้องและขนาด';
+      } else {
+        camera = perspCam;
+        controls.object = perspCam;
+        controls.enableRotate = true;
+        camTargetPos.set(0, 14, 48);
+        camTargetLook.set(0, 6.5, 2);
+        camLerpActive = true;
+        document.getElementById('info-title').textContent = '🏛️ มุมมอง 3 มิติ อาคารเพทาย (เปรียบเทียบตัวตึกจริงกับแผนผัง)';
+        document.getElementById('info-desc').textContent = 'หมุนซูมดูรายละเอียดระเบียงทางเดิน เวทีเกียรติยศ หรือกดปุ่ม "✨ แยกชั้นลอยตัว" ด้านบน';
+      }
+      controls.update();
+    }
+
+    function rotateToCardinal(dir) {
+      if (currentCamView === 'top2d') setCameraView('front');
+      const dist = 48;
+      if (dir === 'N') camTargetPos.set(0, 14, -dist);
+      else if (dir === 'S') camTargetPos.set(0, 14, dist);
+      else if (dir === 'E') camTargetPos.set(dist, 14, 2);
+      else if (dir === 'W') camTargetPos.set(-dist, 14, 2);
+      camTargetLook.set(0, 6.5, 0);
+      camLerpActive = true;
+    }
+
+    function toggleExplodeView() {
+      isExploded = !isExploded;
+      if (isExploded && currentFloor !== 'all') setFloor('all');
+      if (isExploded && currentCamView === 'top2d') setCameraView('front');
+      document.getElementById('btn-explode').classList.toggle('anim-active', isExploded);
+      if (isExploded) {
+        camTargetPos.set(-28, 26, 52);
+        camTargetLook.set(0, 14, 0);
+        camLerpActive = true;
+        document.getElementById('info-title').textContent = '✨ โหมดแยกชั้นอาคารลอยตัว 3 มิติ (Exploded View)';
+        document.getElementById('info-desc').textContent = 'แสดงโครงสร้างผังห้องเรียน บันได และระเบียงของชั้น 1, 2, 3, 4 และหลังคาพร้อมกัน';
+      }
+    }
+
+    function toggleSunAnimation() {
+      sunAnimating = !sunAnimating;
+      document.getElementById('btn-sun').classList.toggle('anim-active', sunAnimating);
+    }
+
+    function updateSunPosition(hour) {
+      const angle = ((hour - 6) / 12) * Math.PI;
+      const sunX = Math.cos(angle) * 65;
+      const sunY = Math.sin(angle) * 58;
+      sunLight.position.set(sunX, Math.max(4, sunY), 32);
+
+      const isNight = (hour < 6.2 || hour > 18.2);
+      const isGolden = (!isNight && (hour < 7.8 || hour > 16.8));
+
+      if (isNight) {
+        scene.background.setHex(0x090d16);
+        sunLight.intensity = 0.12;
+        ambientLight.intensity = 0.35;
+        MAT.neonLamp.emissiveIntensity = 1.6;
+        corridorLights.forEach(l => l.intensity = 1.1);
+      } else if (isGolden) {
+        scene.background.setHex(0xfdba74);
+        sunLight.color.setHex(0xffedd5);
+        sunLight.intensity = 0.9;
+        ambientLight.intensity = 0.65;
+        MAT.neonLamp.emissiveIntensity = 0.8;
+        corridorLights.forEach(l => l.intensity = 0.4);
+      } else {
+        scene.background.setHex(0x7dd3fc);
+        sunLight.color.setHex(0xfffbeb);
+        sunLight.intensity = 1.05;
+        ambientLight.intensity = 0.78;
+        MAT.neonLamp.emissiveIntensity = 0.2;
+        corridorLights.forEach(l => l.intensity = 0);
+      }
+
+      const hh = Math.floor(hour).toString().padStart(2, '0');
+      const mm = Math.floor((hour % 1) * 60).toString().padStart(2, '0');
+      document.getElementById('time-label').textContent = `${hh}:${mm} น.`;
+    }
+
+    function toggleLegendCollapse() {
+      legendCollapsed = !legendCollapsed;
+      const body = document.getElementById('legend-body');
+      const icon = document.getElementById('legend-toggle-icon');
+      body.classList.toggle('hidden', legendCollapsed);
+      icon.textContent = legendCollapsed ? 'กาง ▲' : 'ย่อ ▼';
+    }
+
+    function highlightCategory(cat) {
+      activeCategory = (activeCategory === cat) ? null : cat;
+      ['classroom', 'stair', 'door', 'safety', 'stage'].forEach(c => {
+        document.getElementById('leg-' + c).classList.toggle('legend-active', c === activeCategory);
+        categoryMeshes[c].forEach(m => {
+          if (m.material && m.material.emissive) {
+            m.material.emissive.setHex(c === activeCategory ? 0xfacc15 : 0x000000);
+            m.material.emissiveIntensity = (c === activeCategory) ? 0.55 : 0;
+          }
+        });
+      });
+    }
+
+    function setFloor(fl) {
+      currentFloor = fl;
+      ['all', 1, 2, 3, 4].forEach(k => document.getElementById('f-' + k).classList.toggle('floor-active', k === fl));
+      pethaiGroup.traverse(obj => {
+        if (obj.userData && obj.userData.floorNum !== undefined) {
+          obj.visible = (currentFloor === 'all') ? true : (obj.userData.floorNum <= currentFloor);
+        }
+        if (obj.userData && obj.userData.isRoof) {
+          obj.visible = (currentFloor === 'all');
+        }
+      });
+    }
+
+    function toggleMapGrid() {
+      showGrid = !showGrid;
+      mapGridGroup.visible = showGrid;
+      document.getElementById('grid-btn').classList.toggle('text-cyan-300', showGrid);
+    }
+
+    // === 6. ระบบวัดระยะทาง + คำนวณทิศทาง ===
+    function toggleMeasure() {
+      measureActive = !measureActive;
+      measurePts = [];
+      while (measureGroup.children.length) measureGroup.remove(measureGroup.children[0]);
+      document.getElementById('measure-btn').classList.toggle('cam-active', measureActive);
+      document.getElementById('info-title').textContent = measureActive
+        ? '📏 โหมดวัดระยะทางและทิศทาง (แตะจุดที่ 1 และจุดที่ 2 บนแผนผัง)'
+        : 'ปิดโหมดตลับเมตรแล้ว';
+    }
+
+    function getThaiDirection(dx, dz) {
+      const deg = (Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360;
+      if (deg >= 337.5 || deg < 22.5) return 'ทิศเหนือ (N)';
+      if (deg < 67.5) return 'ทิศตะวันออกเฉียงเหนือ (NE)';
+      if (deg < 112.5) return 'ทิศตะวันออก (E)';
+      if (deg < 157.5) return 'ทิศตะวันออกเฉียงใต้ (SE)';
+      if (deg < 202.5) return 'ทิศใต้ (S)';
+      if (deg < 247.5) return 'ทิศตะวันตกเฉียงใต้ (SW)';
+      if (deg < 292.5) return 'ทิศตะวันตก (W)';
+      return 'ทิศตะวันตกเฉียงเหนือ (NW)';
+    }
+
+    function onPointerDown(e) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(pethaiGroup.children, true);
+      if (!hits.length) return;
+
+      const pt = hits[0].point;
+
+      if (measureActive) {
+        measurePts.push(pt);
+        mkBox(measureGroup, 0.45, 0.45, 0.45, pt.x, pt.y + 0.2, pt.z, 0xfacc15);
+        if (measurePts.length === 2) {
+          const p1 = measurePts[0], p2 = measurePts[1];
+          const dist = p1.distanceTo(p2);
+          const dirName = getThaiDirection(p2.x - p1.x, p2.z - p1.z);
+          const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+          measureGroup.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 3 })));
+          const mid = p1.clone().add(p2).multiplyScalar(0.5);
+          mkSpriteBadge(measureGroup, `${dist.toFixed(2)} ม. (${dirName})`, mid.x, mid.y + 2.0, mid.z, '#78350f', '#facc15', 7.5, 1.8);
+          document.getElementById('info-title').textContent = `📏 ระยะจริง ${dist.toFixed(2)} เมตร | มุ่งไปทาง${dirName}`;
+          document.getElementById('info-desc').textContent = `เทียบมาตราส่วน 1:100 บนกระดาษ = ${dist.toFixed(1)} ซม. (ประมาณ ${(dist / 3.75).toFixed(1)} ช่วงเสา)`;
+          measurePts = [];
+        }
+        return;
+      }
+
+      let cur = hits[0].object;
+      while (cur && cur.parent && !cur.userData.infoTitle) cur = cur.parent;
+      const nearestColIdx = GRID_15_X.reduce((best, val, idx) => Math.abs(val - pt.x) < Math.abs(GRID_15_X[best] - pt.x) ? idx : best, 0);
+      const colCode = COL_LETTERS[nearestColIdx];
+      const wingDir = pt.x < -3 ? 'ฝั่งทิศตะวันตก (ปีกซ้าย)' : (pt.x > 3 ? 'ฝั่งทิศตะวันออก (ปีกขวา)' : 'กึ่งกลางอาคาร');
+
+      if (cur && cur.userData && cur.userData.infoTitle) {
+        document.getElementById('info-title').textContent = cur.userData.infoTitle;
+        document.getElementById('info-desc').textContent = `${cur.userData.infoDesc} | พิกัดเสา ${colCode} (${wingDir})`;
+      } else {
+        document.getElementById('info-title').textContent = `📍 พิกัดแผนผัง: แนวเสา ${colCode} (X = ${pt.x.toFixed(2)} ม.) — ${wingDir}`;
+        document.getElementById('info-desc').textContent = `ความสูงจากพื้นดิน Y = ${pt.y.toFixed(2)} ม. | แตะสัญลักษณ์ในกรอบซ้ายล่างเพื่อเรืองแสงจุดสำคัญ`;
+      }
+    }
+
+    // === 7. ระบบควิซแผนผัง ===
+    function toggleQuizModal() {
+      document.getElementById('quiz-modal').classList.toggle('hidden');
+    }
+
+    function renderQuizQuestion() {
+      const item = QUIZ_DATA[currentQuizIdx];
+      document.getElementById('q-idx').textContent = currentQuizIdx + 1;
+      document.getElementById('q-text').textContent = item.q;
+      document.getElementById('q-feedback').textContent = '';
+      const box = document.getElementById('q-choices');
+      box.innerHTML = '';
+      item.choices.forEach((ch, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'ui-btn px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-indigo-600/70 text-left font-semibold border border-slate-700';
+        btn.textContent = ch;
+        btn.onclick = () => checkQuizAnswer(idx);
+        box.appendChild(btn);
+      });
+    }
+
+    function checkQuizAnswer(choiceIdx) {
+      const item = QUIZ_DATA[currentQuizIdx];
+      const fb = document.getElementById('q-feedback');
+      if (choiceIdx === item.ans) {
+        fb.className = 'text-[11px] font-bold text-emerald-400';
+        fb.textContent = '✅ ' + item.explain;
+        setTimeout(() => {
+          currentQuizIdx = (currentQuizIdx + 1) % QUIZ_DATA.length;
+          renderQuizQuestion();
+        }, 3000);
+      } else {
+        fb.className = 'text-[11px] font-bold text-rose-400';
+        fb.textContent = '❌ ลองสังเกตเข็มทิศมุมขวาบนแล้วเลือกใหม่อีกครั้งนะครับ';
+      }
+    }
+
+    function toggleFullUI(hide) {
+      document.getElementById('top-ui').classList.toggle('hidden', hide);
+      document.getElementById('bottom-ui').classList.toggle('hidden', hide);
+      document.getElementById('legend-panel').classList.toggle('hidden', hide);
+      document.getElementById('hud-compass').classList.toggle('hidden', hide);
+      document.getElementById('restore-ui-btn').classList.toggle('hidden', !hide);
+    }
+
+    function exportPNG() {
+      renderer.render(scene, camera);
+      const a = document.createElement('a');
+      a.download = `Pethai-MapStudio-${currentCamView}-floor-${currentFloor}.png`;
+      a.href = renderer.domElement.toDataURL('image/png');
+      a.click();
+    }
+
+    function onResize() {
+      const w = window.innerWidth, h = window.innerHeight, asp = w / h;
+      perspCam.aspect = asp; perspCam.updateProjectionMatrix();
+      const f = 68;
+      orthoCam.left = -f * asp / 2; orthoCam.right = f * asp / 2;
+      orthoCam.top = f / 2; orthoCam.bottom = -f / 2;
+      orthoCam.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (camLerpActive && camera === perspCam) {
+        perspCam.position.lerp(camTargetPos, 0.08);
+        controls.target.lerp(camTargetLook, 0.08);
+        if (perspCam.position.distanceTo(camTargetPos) < 0.15) camLerpActive = false;
+      }
+
+      floorGroups.forEach((fg, idx) => {
+        const targetY = isExploded ? idx * 5.2 : 0;
+        fg.position.y += (targetY - fg.position.y) * 0.08;
+      });
+      if (roofGroupRef) {
+        const targetRoofY = isExploded ? 4 * 5.2 : 0;
+        roofGroupRef.position.y += (targetRoofY - roofGroupRef.position.y) * 0.08;
+      }
+
+      if (sunAnimating) {
+        sunHours += 0.025;
+        if (sunHours > 20.5) sunHours = 5.5;
+        updateSunPosition(sunHours);
+      }
+
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      const angleDeg = Math.atan2(dir.x, -dir.z) * (180 / Math.PI);
+      const dial = document.getElementById('compass-dial');
+      if (dial) dial.style.transform = `rotate(${-angleDeg}deg)`;
+
+      cloudGroup.children.forEach((c, idx) => {
+        c.position.x += 0.018 * (idx % 2 === 0 ? 1 : 0.7);
+        if (c.position.x > 75) c.position.x = -75;
+      });
+
+      if (activeCategory && categoryMeshes[activeCategory]) {
+        const pulse = 0.35 + Math.sin(Date.now() * 0.006) * 0.25;
+        categoryMeshes[activeCategory].forEach(m => {
+          if (m.material && m.material.emissive) m.material.emissiveIntensity = pulse;
+        });
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
